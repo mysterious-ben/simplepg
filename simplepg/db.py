@@ -23,10 +23,13 @@ def _reconnect_retry(f: Callable) -> Callable:
         try:
             return f(self, *args, **kwargs)
         except (OperationalError, InterfaceError) as e:  # type: ignore
-            logger.info(f"db connection lost: {str(e)}")
-            sleep(self._postgres_reconnect_delay)  # pylint: disable=protected-access
-            self._reconnect()  # pylint: disable=protected-access
-            logger.warning(f"db reconnected: {str(e)}")
+            if self._postgres_reconnect_delay is None:
+                raise e from e
+            else:
+                logger.info(f"db connection lost: {str(e)}")
+                sleep(self._postgres_reconnect_delay)  # pylint: disable=protected-access
+                self._reconnect()  # pylint: disable=protected-access
+                logger.warning(f"db reconnected: {str(e)}")
             return f(self, *args, **kwargs)
 
     return wrapper
@@ -51,8 +54,7 @@ class DbConnection:
         port: int,
         database: str,
         connect_kwargs: dict,
-        postgres_reconnect_delay: int,
-        cast_decimal_to_float: bool = True,
+        postgres_reconnect_delay: Optional[int] = 5,
     ):
         self._psycopg2_url = f"postgresql://{user}:{password}@{host}:{port}/{database}"
         self._connect_kwargs = connect_kwargs
