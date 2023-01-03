@@ -1,10 +1,11 @@
 import functools
 from time import sleep
-from typing import Callable, Dict, List, NamedTuple, Optional, Union
+from typing import Callable, Dict, List, NamedTuple, Optional, Tuple, Union
 
 import psycopg2
 from loguru import logger
 from psycopg2.errors import InterfaceError, OperationalError
+from psycopg2.extras import execute_values
 
 
 def set_cast_decimal_to_float():
@@ -97,3 +98,25 @@ class DbConnection:
             records: List = c.fetchall()
             columns: List[str] = [column.name for column in c.description]
             return FetchResult(records, columns)
+
+    @_reconnect_retry
+    def executemany(self, sql: str, rows: Tuple[Tuple]) -> int:
+        """Execute an SQL query with multiple rows (slow version)
+
+        This method is slow: it's the same as executing commands in a loop.
+        Use execute_values to speed the things up.
+        """
+
+        with self._conn, self._conn.cursor() as c:
+            c.execute(sql, rows)
+            rowcount = c.rowcount
+        return rowcount
+
+    @_reconnect_retry
+    def execute_values(self, sql: str, rows: Tuple[Tuple], page_size: int = 10000) -> int:
+        """Execute an SQL query with multiple rows (fast version)"""
+
+        with self._conn, self._conn.cursor() as c:
+            execute_values(c, sql, rows, template=None, page_size=page_size, fetch=False)
+            rowcount = c.rowcount
+        return rowcount
