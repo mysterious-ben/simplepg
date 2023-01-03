@@ -1,0 +1,3 @@
+# SimplePG
+
+Simple PostgreSQL connections

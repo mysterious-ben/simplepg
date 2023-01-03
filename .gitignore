@@ -1,0 +1,22 @@
+# Python version and packages
+venv/
+.venv/
+
+# IDE
+.idea
+.vscode
+*.swp
+
+# Python cache
+__pycache__/
+.pytest_cache/
+*.pyc
+*.pyo
+.mypy_cache/
+.pytest_cache/
+.pytype/
+.ipynb_checkpoints/
+
+# Temporary and private files
+Untitled*.ipynb
+.env
