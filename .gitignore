@@ -1,6 +1,7 @@
 # Python version and packages
 venv/
 .venv/
+dist/
 
 # IDE
 .idea
