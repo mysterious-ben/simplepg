@@ -110,7 +110,7 @@ class DbConnection:
         """
 
         with self._conn, self._conn.cursor() as c:
-            c.execute(sql, rows)
+            c.executemany(sql, rows)
             rowcount = c.rowcount
         return rowcount
 
