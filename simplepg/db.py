@@ -25,11 +25,11 @@ def _reconnect_retry(f: Callable) -> Callable:
         try:
             return f(self, *args, **kwargs)
         except (OperationalError, InterfaceError) as e:  # type: ignore
-            if self._postgres_reconnect_delay is None:
+            if self.postgres_reconnect_delay is None:
                 raise e from e
             else:
                 logger.info(f"db connection lost: {str(e)}")
-                sleep(self._postgres_reconnect_delay)  # pylint: disable=protected-access
+                sleep(self.postgres_reconnect_delay)  # pylint: disable=protected-access
                 self._reconnect()  # pylint: disable=protected-access
                 logger.warning(f"db reconnected: {str(e)}")
             return f(self, *args, **kwargs)
@@ -75,18 +75,18 @@ class DbConnection:
             postgres_reconnect_delay: Optional[int] = 5 - postgres reconnect delay (seconds)
         """
 
-        self._psycopg2_url = f"postgresql://{user}:{password}@{host}:{port}/{database}"
-        self._connect_kwargs = connect_kwargs
-        self._pool_min_connections = pool_min_connections
-        self._pool_max_connections = pool_max_connections
+        self.psycopg2_url = f"postgresql://{user}:{password}@{host}:{port}/{database}"
+        self.connect_kwargs = connect_kwargs
+        self.pool_min_connections = pool_min_connections
+        self.pool_max_connections = pool_max_connections
         # self._conn = psycopg2.connect(self._psycopg2_url, **self._connect_kwargs)
         self._conn_pool = pool.ThreadedConnectionPool(
-            self._pool_min_connections,
-            self._pool_max_connections,
-            self._psycopg2_url,
-            **self._connect_kwargs,
+            self.pool_min_connections,
+            self.pool_max_connections,
+            self.psycopg2_url,
+            **self.connect_kwargs,
         )
-        self._postgres_reconnect_delay = postgres_reconnect_delay
+        self.postgres_reconnect_delay = postgres_reconnect_delay
 
     def is_valid(self) -> bool:
         return True
@@ -96,10 +96,10 @@ class DbConnection:
         # self._conn = psycopg2.connect(self._psycopg2_url, **self._connect_kwargs)
         self._conn_pool.closeall()
         self._conn_pool = pool.ThreadedConnectionPool(
-            self._pool_min_connections,
-            self._pool_max_connections,
-            self._psycopg2_url,
-            **self._connect_kwargs,
+            self.pool_min_connections,
+            self.pool_max_connections,
+            self.psycopg2_url,
+            **self.connect_kwargs,
         )
 
     @property

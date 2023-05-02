@@ -21,6 +21,7 @@ pylint = "^2.15.9"
 flake8 = "^6.0.0"
 python-dotenv = "^1.0.0"
 envparse = "^0.2.0"
+pre-commit = "^3.3.0"
 
 [build-system]
 requires = ["poetry-core"]
