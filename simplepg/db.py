@@ -1,9 +1,11 @@
 import functools
+from contextlib import contextmanager
 from time import sleep
 from typing import Callable, Dict, List, NamedTuple, Optional, Tuple, Union
 
 import psycopg2
 from loguru import logger
+from psycopg2 import pool
 from psycopg2.errors import InterfaceError, OperationalError
 from psycopg2.extras import execute_values
 
@@ -54,19 +56,49 @@ class DbConnection:
         port: int,
         database: str,
         connect_kwargs: dict,
+        pool_min_connections: int,
+        pool_max_connections: int,
         postgres_reconnect_delay: Optional[int] = 5,
     ):
         self._psycopg2_url = f"postgresql://{user}:{password}@{host}:{port}/{database}"
         self._connect_kwargs = connect_kwargs
-        self._conn = psycopg2.connect(self._psycopg2_url, **self._connect_kwargs)
+        self._pool_min_connections = pool_min_connections
+        self._pool_max_connections = pool_max_connections
+        # self._conn = psycopg2.connect(self._psycopg2_url, **self._connect_kwargs)
+        self._conn_pool = pool.ThreadedConnectionPool(
+            self._pool_min_connections,
+            self._pool_max_connections,
+            self._psycopg2_url,
+            **self._connect_kwargs,
+        )
         self._postgres_reconnect_delay = postgres_reconnect_delay
 
     def is_valid(self) -> bool:
         return True
 
     def _reconnect(self):
-        self._conn.close()
-        self._conn = psycopg2.connect(self._psycopg2_url, **self._connect_kwargs)
+        # self._conn.close()
+        # self._conn = psycopg2.connect(self._psycopg2_url, **self._connect_kwargs)
+        self._conn_pool.closeall()
+        self._conn_pool = pool.ThreadedConnectionPool(
+            self._pool_min_connections,
+            self._pool_max_connections,
+            self._psycopg2_url,
+            **self._connect_kwargs,
+        )
+
+    @property
+    @contextmanager
+    def _conn(self):
+        conn = self._conn_pool.getconn()
+        try:
+            yield conn
+        except Exception as e:
+            conn.rollback()
+            raise e
+        else:
+            conn.commit()
+        self._conn_pool.putconn(conn)
 
     @_reconnect_retry
     def execute(self, sql: str, vars_: Optional[Union[List, Dict]] = None) -> int:
@@ -76,9 +108,10 @@ class DbConnection:
             sql: an SQL statement
             vars: https://www.psycopg.org/docs/usage.html#query-parameters
         """
-        with self._conn, self._conn.cursor() as c:
-            c.execute(sql, vars_)
-            rowcount = c.rowcount
+        with self._conn as conn:
+            with conn.cursor() as c:
+                c.execute(sql, vars_)
+                rowcount = c.rowcount
         return rowcount
 
     @_reconnect_retry
@@ -95,11 +128,12 @@ class DbConnection:
             Fetched records and their description
         """
 
-        with self._conn, self._conn.cursor() as c:
-            c.execute(sql, vars_)
-            records: List = c.fetchall()
-            columns: List[str] = [column.name for column in c.description]
-            return FetchResult(records, columns)
+        with self._conn as conn:
+            with conn.cursor() as c:
+                c.execute(sql, vars_)
+                records: List = c.fetchall()
+                columns: List[str] = [column.name for column in c.description]
+        return FetchResult(records, columns)
 
     @_reconnect_retry
     def executemany(self, sql: str, rows: Tuple[Tuple]) -> int:
@@ -109,16 +143,18 @@ class DbConnection:
         Use execute_values to speed the things up.
         """
 
-        with self._conn, self._conn.cursor() as c:
-            c.executemany(sql, rows)
-            rowcount = c.rowcount
+        with self._conn as conn:
+            with conn.cursor() as c:
+                c.executemany(sql, rows)
+                rowcount = c.rowcount
         return rowcount
 
     @_reconnect_retry
     def execute_values(self, sql: str, rows: Tuple[Tuple], page_size: int = 10000) -> int:
         """Execute an SQL query with multiple rows (fast version)"""
 
-        with self._conn, self._conn.cursor() as c:
-            execute_values(c, sql, rows, template=None, page_size=page_size, fetch=False)
-            rowcount = c.rowcount
+        with self._conn as conn:
+            with conn.cursor() as c:
+                execute_values(c, sql, rows, template=None, page_size=page_size, fetch=False)
+                rowcount = c.rowcount
         return rowcount
