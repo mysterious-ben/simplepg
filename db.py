@@ -5,7 +5,6 @@ from typing import Any, Callable, Dict, List, NamedTuple, Optional, Union
 import psycopg2
 import streamlit as st
 from psycopg2.errors import InterfaceError, OperationalError
-
 from src.config import config
 from src.log import logger
 

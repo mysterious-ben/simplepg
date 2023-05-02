@@ -4,7 +4,6 @@ from envparse import env
 
 from simplepg import DbConnection
 
-
 load_dotenv(find_dotenv())
 
 
