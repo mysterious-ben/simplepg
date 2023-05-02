@@ -2,7 +2,7 @@ import pytest
 from dotenv import find_dotenv, load_dotenv
 from envparse import env
 
-from simplepg.db import DbConnection
+from simplepg import DbConnection
 
 
 load_dotenv(find_dotenv())

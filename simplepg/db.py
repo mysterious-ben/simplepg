@@ -60,6 +60,21 @@ class DbConnection:
         pool_max_connections: int,
         postgres_reconnect_delay: Optional[int] = 5,
     ):
+        """
+        Postgres DB connection manager
+
+        Args:
+            user: str - username
+            password: str - password
+            host: str - host
+            port: int - port
+            database: str - database name
+            connect_kwargs: dict - connection kwargs
+            pool_min_connections: int - minimum number of pool connections
+            pool_max_connections: int - maximum number of pool connections
+            postgres_reconnect_delay: Optional[int] = 5 - postgres reconnect delay (seconds)
+        """
+
         self._psycopg2_url = f"postgresql://{user}:{password}@{host}:{port}/{database}"
         self._connect_kwargs = connect_kwargs
         self._pool_min_connections = pool_min_connections
@@ -107,6 +122,12 @@ class DbConnection:
         Args:
             sql: an SQL statement
             vars: https://www.psycopg.org/docs/usage.html#query-parameters
+
+        Returns:
+            Number of rows affected
+
+        Example:
+            db.execute("DROP TABLE IF EXISTS table")
         """
         with self._conn as conn:
             with conn.cursor() as c:
@@ -125,7 +146,10 @@ class DbConnection:
             vars: https://www.psycopg.org/docs/usage.html#query-parameters
 
         Returns:
-            Fetched records and their description
+            Fetched records and column names
+
+        Example:
+            records, columns = db.execute_and_fetchall("SELECT * FROM table")
         """
 
         with self._conn as conn:
@@ -141,6 +165,12 @@ class DbConnection:
 
         This method is slow: it's the same as executing commands in a loop.
         Use execute_values to speed the things up.
+
+        Returns:
+            Number of rows affected
+
+        Example:
+            row_count = db.executemany("INSERT INTO table VALUES (%s, %s)", [(1, 2), (3, 4)])
         """
 
         with self._conn as conn:
@@ -151,7 +181,14 @@ class DbConnection:
 
     @_reconnect_retry
     def execute_values(self, sql: str, rows: Tuple[Tuple], page_size: int = 10000) -> int:
-        """Execute an SQL query with multiple rows (fast version)"""
+        """Execute an SQL query with multiple rows (fast version)
+
+        Returns:
+            Number of rows affected
+
+        Example:
+            row_count = db.execute_values("INSERT INTO table VALUES %s", [(1, 2), (3, 4)])
+        """
 
         with self._conn as conn:
             with conn.cursor() as c:
