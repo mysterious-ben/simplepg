@@ -1,3 +1,6 @@
+import datetime as dt
+import threading
+
 import pytest
 from dotenv import find_dotenv, load_dotenv
 from envparse import env
@@ -56,3 +59,18 @@ def test_execute_values(db_connection: DbConnection):
     db_connection.execute("DROP TABLE IF EXISTS test_table")
     assert records == [(1, "test1"), (2, "test2")]
     assert columns == ["id", "name"]
+
+
+# Test multiple connections in parallel
+@pytest.mark.integration
+def test_parallel_connections(db_connection: DbConnection):
+    db_connection.execute("DROP TABLE IF EXISTS test_table")
+    start = dt.datetime.now()
+    threading.Thread(
+        target=db_connection.execute,
+        kwargs=dict(sql="SELECT pg_sleep(5)"),
+    ).start()
+    db_connection.execute("CREATE TABLE test_table (id SERIAL PRIMARY KEY, name VARCHAR)")
+    db_connection.execute("DROP TABLE IF EXISTS test_table")
+    elapsed = (dt.datetime.now() - start).total_seconds()
+    assert elapsed >= 5

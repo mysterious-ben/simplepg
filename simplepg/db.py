@@ -1,5 +1,6 @@
 import functools
 from contextlib import contextmanager
+from threading import Semaphore
 from time import sleep
 from typing import Callable, Dict, List, NamedTuple, Optional, Tuple, Union
 
@@ -45,6 +46,28 @@ class FetchResult(NamedTuple):
         return [dict(zip(self.columns, x)) for x in self.records]
 
 
+class ThreadedConnectionPool(pool.ThreadedConnectionPool):
+    """ThreadedConnectionPool with a semaphore to limit the number of connections"""
+
+    def __init__(self, minconn, maxconn, *args, **kwargs):
+        self._semaphore = Semaphore(maxconn)
+        super().__init__(minconn, maxconn, *args, **kwargs)
+
+    def getconn(self, *args, **kwargs):
+        self._semaphore.acquire()
+        try:
+            return super().getconn(*args, **kwargs)
+        except Exception as e:
+            self._semaphore.release()
+            raise e
+
+    def putconn(self, *args, **kwargs):
+        try:
+            super().putconn(*args, **kwargs)
+        finally:
+            self._semaphore.release()
+
+
 class DbConnection:
     """Postgres DB connection manager"""
 
@@ -80,7 +103,7 @@ class DbConnection:
         self.pool_min_connections = pool_min_connections
         self.pool_max_connections = pool_max_connections
         # self._conn = psycopg2.connect(self._psycopg2_url, **self._connect_kwargs)
-        self._conn_pool = pool.ThreadedConnectionPool(
+        self._conn_pool = ThreadedConnectionPool(
             self.pool_min_connections,
             self.pool_max_connections,
             self.psycopg2_url,
@@ -95,7 +118,7 @@ class DbConnection:
         # self._conn.close()
         # self._conn = psycopg2.connect(self._psycopg2_url, **self._connect_kwargs)
         self._conn_pool.closeall()
-        self._conn_pool = pool.ThreadedConnectionPool(
+        self._conn_pool = ThreadedConnectionPool(
             self.pool_min_connections,
             self.pool_max_connections,
             self.psycopg2_url,
@@ -113,7 +136,8 @@ class DbConnection:
             raise e
         else:
             conn.commit()
-        self._conn_pool.putconn(conn)
+        finally:
+            self._conn_pool.putconn(conn)
 
     @_reconnect_retry
     def execute(self, sql: str, vars_: Optional[Union[List, Dict]] = None) -> int:
